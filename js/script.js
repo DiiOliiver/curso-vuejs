@@ -16,14 +16,11 @@ Vue.component('my-app', {
         <titulo></titulo>
         <div class="row">
             <div class="col-md-12">
-                <novo-jogo :times="times" @novo-jogo="showPlacar($event)"></novo-jogo>
+                <novo-jogo :times="times"></novo-jogo>
             </div>
         </div>
         <br>
         <div class="row">
-            <div class="col-md-12" v-show="visao!='tabela'">
-                <placar :time-casa="timeCasa" :time-fora="timeFora" @fim-jogo="showTabela($event)"></placar>
-            </div>
             <div class="col-md-12" v-show="visao === 'tabela'">
                 <tabela-clubes :times="times"></tabela-clubes>
             </div>
@@ -51,8 +48,8 @@ Vue.component('titulo', {
 });
 
 Vue.component('tabela-clubes', {
-    props: [
-        'times'
+    inject: [
+        'timesColecao'
     ],
     data() {
         return {
@@ -61,6 +58,7 @@ Vue.component('tabela-clubes', {
                 colunas: ['pontos', 'gm', 'gs', 'saldo'],
                 orientacao: ['desc', 'desc', 'asc', 'desc']
             },
+            times: this.timesColecao
         }
     },
     template: `
@@ -102,12 +100,11 @@ Vue.component('tabela-clubes', {
             })
         },
         timesOrdenados() {
-            return _.orderBy(this.$root.times, this.ordem.colunas, this.ordem.orientacao);
+            return _.orderBy(this.times, this.ordem.colunas, this.ordem.orientacao);
         }
     },
     methods: {
         ordenar(indice) {
-            //this.ordem.orientacao[indice] = this.ordem.orientacao[indice] =='desc'? 'asc':'desc';
             this.$set(this.ordem.orientacao, indice, this.ordem.orientacao[indice] == 'desc' ? 'asc' :
                 'desc')
         }
@@ -115,8 +112,13 @@ Vue.component('tabela-clubes', {
 });
 
 Vue.component('clubes-libertadores', {
-    props: [
-        'times'
+    data() {
+        return {
+            times: this.timesColecao
+        }
+    },
+    inject: [
+        'timesColecao'
     ],
     template: `
         <div>
@@ -130,14 +132,19 @@ Vue.component('clubes-libertadores', {
     `,
     computed: {
         timesLibertadores() {
-            return this.$root.times.slice(0, 6)
+            return this.times.slice(0, 6)
         },
     }
 });
 
 Vue.component('clubes-rebaixados', {
-    props: [
-        'times'
+    data() {
+        return {
+            times: this.timesColecao
+        }
+    },
+    inject: [
+        'timesColecao'
     ],
     template: `
         <div>
@@ -151,12 +158,44 @@ Vue.component('clubes-rebaixados', {
     `,
     computed: {
         timesRebaixados() {
-            return this.$root.times.slice(16, 20)
+            return this.times.slice(16, 20)
         },
     }
 });
 
-Vue.component('placar', {
+
+Vue.component('novo-jogo', {
+    template: `
+        <div>
+            <button class="btn btn-primary" @click="criarNovoJogo">Novo jogo</button>
+            <placar-modal :time-casa="timeCasa" :time-fora="timeFora" ref="modal"></placar-modal>
+        </div>
+    `,
+    data() {
+        return {
+            timeCasa: null,
+            timeFora: null,
+            times: this.timesColecao
+        }
+    },
+    inject: [
+        'timesColecao'
+    ],
+    methods: {
+        criarNovoJogo() {
+            var modal = this.$refs.modal;
+            modal.showModal();
+
+            var indiceCasa = Math.floor(Math.random() * 20),
+                indiceFora = Math.floor(Math.random() * 20);
+
+            this.timeCasa = this.times[indiceCasa];
+            this.timeFora = this.times[indiceFora];
+        },
+    }
+});
+
+Vue.component('placar-modal', {
     props: [
         'timeCasa',
         'timeFora'
@@ -168,48 +207,70 @@ Vue.component('placar', {
         }
     },
     template: `
-    <form class="form-inline">
-        <input type="text" class="form-control col-md-1" v-model="golsCasa">
-        <clube :time="timeCasa" invertido="true" v-if="timeCasa"></clube>
-        <span>X</span>
-        <clube :time="timeFora" v-if="timeFora"></clube>
-        <input type="text" class="form-control  col-md-1" v-model="golsFora">
-        <button type="button" class="btn btn-primary" @click="fimJogo">Fim de jogo</button>
-    </form>
+        <modal ref="modal">            
+            <h5 slot="header" class="modal-title">Novo jogo</h5>
+            <form class="form-inline">
+                <input type="text" class="form-control col-md-1" v-model="golsCasa">
+                <clube :time="timeCasa" invertido="true" v-if="timeCasa"></clube>
+                <span>X</span>
+                <clube :time="timeFora" v-if="timeFora"></clube>
+                <input type="text" class="form-control  col-md-1" v-model="golsFora">
+            </form>
+            <div slot="footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-primary" @click="fimJogo">Fim de jogo</button>
+            </div>
+        </modal>
     `,
     methods: {
+        showModal() {
+            this.getModal().show();
+        },
+        closeModal() {
+            this.getModal().close();
+        },         
+        getModal() {
+            return this.$refs.modal;
+        },         
         fimJogo() {
             var golsMarcados = parseInt(this.golsCasa);
             var golsSofridos = parseInt(this.golsFora);
             this.timeCasa.fimJogo(this.timeFora, golsMarcados, golsSofridos);
-            this.$emit('fim-jogo', {
-                golsCasa: this.golsCasa,
-                golsFora: this.golsFora,
-            });
-        },
-    }
-});
-
-Vue.component('novo-jogo', {
-    template: `
-        <div>
-            <button class="btn btn-primary" @click="criarNovoJogo">Novo jogo</button>
-        </div>
-    `,
-    props: [
-        'times'
-    ],
-    methods: {
-        criarNovoJogo() {
-            var indiceCasa = Math.floor(Math.random() * 20),
-                indiceFora = Math.floor(Math.random() * 20)
-
-            var timeCasa = this.$root.times[indiceCasa];
-            var timeFora = this.$root.times[indiceFora];
-            this.$emit('novo-jogo', {timeCasa, timeFora});
+            this.closeModal();
         },
     }
 })
+
+Vue.component('modal', {
+    template: `
+        <div class="modal fade" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <slot name="header"></slot>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <slot></slot>
+                    </div>
+                    <div class="modal-footer">
+                        <slot name="footer"></slot>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `,
+    methods: {
+        show() {
+            $(this.$el).modal('show');
+        },
+        close() {
+            $(this.$el).modal('hide');
+        }
+    }
+});
 
 Vue.component('clube', {
     props:[
@@ -224,30 +285,57 @@ Vue.component('clube', {
     `,
 });
 
-var vm = new Vue({
+
+new Vue({
     el: "#app",
+    provide() {
+        return {
+            timesColecao: [
+                new Time('palmeiras', 'assets/palmeiras_60x60.png'),
+                new Time('Internacional', 'assets/internacional_60x60.png'),
+                new Time('Flamengo', 'assets/flamengo_60x60.png'),
+                new Time('Atlético-MG', 'assets/atletico_mg_60x60.png'),
+                new Time('Santos', 'assets/santos_60x60.png'),
+                new Time('Botafogo', 'assets/botafogo_60x60.png'),
+                new Time('Atlético-PR', 'assets/atletico-pr_60x60.png'),
+                new Time('Corinthians', 'assets/corinthians_60x60.png'),
+                new Time('Grêmio', 'assets/gremio_60x60.png'),
+                new Time('Fluminense', 'assets/fluminense_60x60.png'),
+                new Time('Bahia', 'assets/bahia_60x60.png'),
+                new Time('Chapecoense', 'assets/chapecoense_60x60.png'),
+                new Time('São Paulo', 'assets/sao_paulo_60x60.png'),
+                new Time('Cruzeiro', 'assets/cruzeiro_60x60.png'),
+                new Time('Sport', 'assets/sport_60x60.png'),
+                new Time('Ceará', 'assets/ceara_60x60.png'),
+                new Time('Vitória', 'assets/vitoria_60x60.png'),
+                new Time('Vasco', 'assets/vasco_60x60.png'),
+                new Time('América-MG', 'assets/america_mg_60x60.png'),
+                new Time('Paraná', 'assets/parana_60x60.png'),
+            ]
+        }
+    },
     data: {
-        times: [
-            new Time('palmeiras', 'assets/palmeiras_60x60.png'),
-            new Time('Internacional', 'assets/internacional_60x60.png'),
-            new Time('Flamengo', 'assets/flamengo_60x60.png'),
-            new Time('Atlético-MG', 'assets/atletico_mg_60x60.png'),
-            new Time('Santos', 'assets/santos_60x60.png'),
-            new Time('Botafogo', 'assets/botafogo_60x60.png'),
-            new Time('Atlético-PR', 'assets/atletico-pr_60x60.png'),
-            new Time('Corinthians', 'assets/corinthians_60x60.png'),
-            new Time('Grêmio', 'assets/gremio_60x60.png'),
-            new Time('Fluminense', 'assets/fluminense_60x60.png'),
-            new Time('Bahia', 'assets/bahia_60x60.png'),
-            new Time('Chapecoense', 'assets/chapecoense_60x60.png'),
-            new Time('São Paulo', 'assets/sao_paulo_60x60.png'),
-            new Time('Cruzeiro', 'assets/cruzeiro_60x60.png'),
-            new Time('Sport', 'assets/sport_60x60.png'),
-            new Time('Ceará', 'assets/ceara_60x60.png'),
-            new Time('Vitória', 'assets/vitoria_60x60.png'),
-            new Time('Vasco', 'assets/vasco_60x60.png'),
-            new Time('América-MG', 'assets/america_mg_60x60.png'),
-            new Time('Paraná', 'assets/parana_60x60.png'),
-        ],
+        // times: [
+        //     new Time('palmeiras', 'assets/palmeiras_60x60.png'),
+        //     new Time('Internacional', 'assets/internacional_60x60.png'),
+        //     new Time('Flamengo', 'assets/flamengo_60x60.png'),
+        //     new Time('Atlético-MG', 'assets/atletico_mg_60x60.png'),
+        //     new Time('Santos', 'assets/santos_60x60.png'),
+        //     new Time('Botafogo', 'assets/botafogo_60x60.png'),
+        //     new Time('Atlético-PR', 'assets/atletico-pr_60x60.png'),
+        //     new Time('Corinthians', 'assets/corinthians_60x60.png'),
+        //     new Time('Grêmio', 'assets/gremio_60x60.png'),
+        //     new Time('Fluminense', 'assets/fluminense_60x60.png'),
+        //     new Time('Bahia', 'assets/bahia_60x60.png'),
+        //     new Time('Chapecoense', 'assets/chapecoense_60x60.png'),
+        //     new Time('São Paulo', 'assets/sao_paulo_60x60.png'),
+        //     new Time('Cruzeiro', 'assets/cruzeiro_60x60.png'),
+        //     new Time('Sport', 'assets/sport_60x60.png'),
+        //     new Time('Ceará', 'assets/ceara_60x60.png'),
+        //     new Time('Vitória', 'assets/vitoria_60x60.png'),
+        //     new Time('Vasco', 'assets/vasco_60x60.png'),
+        //     new Time('América-MG', 'assets/america_mg_60x60.png'),
+        //     new Time('Paraná', 'assets/parana_60x60.png'),
+        // ],
     }
 });
